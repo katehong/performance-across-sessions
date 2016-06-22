@@ -1,0 +1,174 @@
+%% Analyze performance over many sessions
+%This program reads the .txt file output from arduino for detection task.
+%
+% Files are collected into a single folder (done manually for now) ...
+% each animal has its own folder with animal name with files from a series
+% of dates. Remove figure files from folder (put into separate folder) or 
+% else the program won't work.
+% read all the files for each day apoornd plot the %correct responses as 
+% animal performance.
+% Uses file name to get dates on X axis,
+% Also requires the use of function XYrotalabel(xangle,yangle) (from mathworks)
+% to rotate the axes label for better viewing.
+% open directory file that has all the text files in it:
+
+close all;
+clear all;
+path = uigetdir('*.txt', 'Select a text file of behavior to read')
+cd(path);
+
+currDir = dir;
+fileList = struct([]);
+numRec = 0;
+% LOOK THROUGH ALL FILES IN THE FOLDER FOR THIS DAY
+bottomNum = [];
+rewardNum = [];
+catchNum = [];
+incorCatchNum = [];
+rwdFreqIdx = 0;
+rwdFreq = [];
+for i = 3:length(currDir); %skips the first 2 parent directories . and ..
+    if strfind(currDir(i).name, '.txt');
+        
+        %collect all the file names into an array
+        file{i} = currDir(i).name;% make sure file is .txt, thus data
+        fileName = file{i};
+        fileDate {i} = fileName(1:6);
+        %fileDate {i} = fileNam(i);
+        % find number of bottom stimuli
+        fullCell = textread(file{i},'%s', 'delimiter', '\n'); % read in the .txt file
+        bottomCell = strfind(fullCell, 'bottom'); %array with all lines with 'bottom' in it
+        bottomIndex = find(~cellfun('isempty',bottomCell));
+        bottomNum(i) = length(bottomIndex);
+        % find number of rewarded trials
+        rewardCell = strfind(fullCell, 'REWARD');
+        rewardIndex = find(~cellfun('isempty',rewardCell));
+        rewardNum(i) = length(rewardIndex);
+        % find number of catch trials
+        catchCell = strfind(fullCell, 'catch');
+        catchIndex = find(~cellfun('isempty', catchCell));
+        catchNum(i) = length(catchIndex);
+        % find number of incorrect responses to catch trial
+        incorCatchCell = strfind(fullCell, 'unrewarded');
+        incorCatchIndex = find(~cellfun('isempty', incorCatchCell));
+        incorCatchNum(i) = length(incorCatchIndex);
+        rwdFreqIdx = find(ismember(fullCell,'rewarded stimulus frequency = '));
+        rwdFreqIdx = rwdFreqIdx+1;
+        rwdFreq{i} = fullCell(rwdFreqIdx);
+    else
+    end
+end
+
+dataArray = [bottomNum; rewardNum; catchNum; incorCatchNum];
+numFiles = length(dataArray);
+
+% dataCol1: total number of stim trials
+% dataCol2: number of rewarded trials
+% dataCol3: total number of catch trials
+% dataCol4: number of incorrect response to catch trials (false alarms)
+
+for j = 3:numFiles
+    dataCol= dataArray(:,j);
+    fractCorrect(j) = (dataCol(2)+dataCol(3)-dataCol(4))/(dataCol(1) + dataCol(3));
+    fractStimResp(j) = dataCol(2)/dataCol(1); 
+    fractCatchResp(j) = dataCol(4)/dataCol(3);
+    % disc index: fraction hits - fraction false alarm
+    discIndex(j) =(dataCol(2)/dataCol(1))-(dataCol(4)/dataCol(3));
+    fractCorrectNorm(j) = (fractStimResp(j)+(1-fractCatchResp(j)))/2;
+   
+end
+%get rid of NaNs in discrimination index (in cases where no trials present)
+discIndex(isnan(discIndex))=0;
+ 
+XLength = length(fractStimResp(3:numFiles));
+XValues = (1: XLength); 
+fileList = fileDate(3:end);  
+
+
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%for plotting with trimmed days or Mondays in different color
+% load a text file with a list of dates for each criterion - same for cages
+% 18-20
+trimDates = load('C:\DATA\behavior\headfixed-detection task\currently in training\trimdates.txt');
+mondays = load('C:\DATA\behavior\headfixed-detection task\currently in training\mondays.txt');
+
+fileDateNum = str2double(fileDate); %transfrom to numbers
+
+[vals,idx] = intersect(fileDateNum,trimDates); %values and indices of all common dates
+[monVal,monIdx] = intersect(fileDateNum,mondays);
+%% plot with different color for the x values found in indices above.
+
+figJ = figure;
+subplot(411)
+hold on;
+p = plot(XValues, fractStimResp(3:numFiles)); %fraction response to stimulus
+set(gca, 'Xtick', XValues, 'XtickLabel', fileList);
+
+set(p,'Color','blue','LineWidth',2, ...
+    'Marker', '.',...
+    'MarkerEdgeColor','b', ...
+    'MarkerSize', 15);
+title('correct responses (blue) and catch responses (red)')
+
+q = plot(fractCatchResp(3:numFiles)); %fraction response to catch
+set(q,'Color','red','LineWidth',2, ...
+    'Marker', '.',...
+    'MarkerEdgeColor','r', ...
+    'MarkerSize', 15);
+ylim([0 1])
+ylabel('lever response');
+XYrotalabel(45,0);
+line([min(XValues) max(XValues)],[0.75 0.75],'Color','r');
+line([min(XValues) max(XValues)],[0.5 0.5],'Color','k');
+ 
+subplot(412)
+hold on;
+p2 = plot(XValues ,fractCorrect(3:numFiles));
+ set(gca, 'Xtick', XValues, 'XtickLabel', fileList);
+ set(p2,'Color','black','LineWidth',2, ...
+    'Marker', '.',...
+    'MarkerEdgeColor','k', ...
+    'MarkerSize', 15);
+ylabel('fraction correct');
+line([min(XValues) max(XValues)],[0.75 0.75],'Color','r');
+line([min(XValues) max(XValues)],[0.5 0.5],'Color','k');
+ylim([0 1])
+XYrotalabel(45,0);
+scatter(idx-2, fractCorrect(idx),'r','x'); %red circle on days where trimming occurred
+scatter(monIdx-2, fractCorrect(monIdx),'g','.');
+
+subplot(413)
+hold on
+ylabel('DI');
+xlabel('session')
+p3 = plot(XValues, discIndex(3:numFiles));
+ set(p3,'Color','black','LineWidth',2, ...
+    'Marker', '.',...
+    'MarkerEdgeColor','k', ...
+    'MarkerSize', 15);
+line([min(XValues) max(XValues)],[0.5 0.5],'Color','r','LineStyle', ':');
+line([min(XValues) max(XValues)],[0 0],'Color','k','LineStyle', ':');
+scatter(idx-2, discIndex(idx),'r','x'); %red circle on days where trimming occurred
+scatter(monIdx-2, discIndex(monIdx),'g','.');
+legend('DI','criterion','chance','trimmed','Monday', 'Location', 'southoutside');
+
+%% Also plot the latency of response over time.
+
+
+%% plot the same thing in bargraph form (useful for shorter periods)
+figK = figure;
+hold on
+title('DI over sessions');
+ylabel('DI');
+%xlabel('session')
+p3 = bar(XValues, discIndex(3:numFiles));
+set(gca, 'Xtick', XValues, 'XtickLabel', fileList);
+xlimits = xlim
+XYrotalabel(45,0);
+line([xlimits(1) xlimits(2)],[0.5 0.5],'Color','r','LineStyle', ':');
+line([min(XValues) max(XValues)],[0 0],'Color','k','LineStyle', ':');
+redLine = scatter(idx-2, discIndex(idx),'r','x'); %red circle on days where trimming occurred
+greenDots = scatter(monIdx-2, discIndex(monIdx),'g','.');
+%legend([redLine, greenDots],  'trimmed','mondays','Location', 'northwest')
+
